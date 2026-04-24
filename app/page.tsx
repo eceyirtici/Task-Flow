@@ -1,65 +1,831 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+type Priority = "Low" | "Medium" | "High";
+
+type Card = {
+  id: string;
+  title: string;
+  description: string;
+  columnId: string;
+  label: string;
+  assignee: string;
+  dueDate: string;
+  priority: Priority;
+  order: number;
+};
+
+type Column = {
+  id: string;
+  title: string;
+  order: number;
+};
+
+type Activity = {
+  id: string;
+  text: string;
+  time: string;
+};
+
+type Board = {
+  id: string;
+  title: string;
+  columns: Column[];
+  cards: Card[];
+  activities: Activity[];
+};
+
+const defaultBoard: Board = {
+  id: "board-1",
+  title: "TaskFlow Product Board",
+  columns: [
+    { id: "todo", title: "To Do", order: 1000 },
+    { id: "progress", title: "In Progress", order: 2000 },
+    { id: "review", title: "Review", order: 3000 },
+    { id: "done", title: "Done", order: 4000 },
+  ],
+  cards: [
+    {
+      id: "card-1",
+      title: "Design login screen",
+      description: "Create a simple demo login/register flow.",
+      columnId: "todo",
+      label: "UI",
+      assignee: "Ece",
+      dueDate: "2026-04-28",
+      priority: "High",
+      order: 1000,
+    },
+    {
+      id: "card-2",
+      title: "Add drag and drop",
+      description: "Cards should move between columns smoothly.",
+      columnId: "todo",
+      label: "Core",
+      assignee: "Ece",
+      dueDate: "2026-04-28",
+      priority: "Medium",
+      order: 2000,
+    },
+    {
+      id: "card-3",
+      title: "Persist board state",
+      description: "Save cards, columns and ordering in localStorage.",
+      columnId: "todo",
+      label: "Data",
+      assignee: "Ece",
+      dueDate: "2026-04-28",
+      priority: "Medium",
+      order: 3000,
+    },
+  ],
+  activities: [],
+};
+
+function getPriorityStyle(priority: Priority) {
+  if (priority === "High") return "bg-red-100 text-red-700";
+  if (priority === "Medium") return "bg-orange-100 text-orange-700";
+  return "bg-green-100 text-green-700";
+}
+
+function reorderWithStep<T extends { order: number }>(items: T[]) {
+  return items.map((item, index) => ({
+    ...item,
+    order: (index + 1) * 1000,
+  }));
+}
+
+function SortableCard({
+  card,
+  onEdit,
+  onMoveCard,
+}: {
+  card: Card;
+  onEdit: (card: Card) => void;
+  onMoveCard: (cardId: string, direction: "up" | "down") => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: card.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-xl border bg-white p-4 shadow-sm transition ${
+        isDragging ? "opacity-70 shadow-xl" : "hover:shadow-md"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div
+          {...listeners}
+          {...attributes}
+          className="cursor-grab active:cursor-grabbing"
+        >
+          <h3 className="font-semibold text-slate-900">{card.title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{card.description}</p>
+        </div>
+
+        <button
+          onClick={() => onEdit(card)}
+          className="rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-700 hover:bg-slate-200"
+        >
+          Edit
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+        <span className={`rounded-full px-2 py-1 ${getPriorityStyle(card.priority)}`}>
+          {card.priority}
+        </span>
+        <span className="rounded-full bg-blue-100 px-2 py-1 text-blue-700">
+          {card.label || "General"}
+        </span>
+        <span className="rounded-full bg-purple-100 px-2 py-1 text-purple-700">
+          {card.assignee || "Unassigned"}
+        </span>
+        {card.dueDate && (
+          <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">
+            {card.dueDate}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => onMoveCard(card.id, "up")}
+          className="rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+        >
+          ↑ Move up
+        </button>
+        <button
+          onClick={() => onMoveCard(card.id, "down")}
+          className="rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+        >
+          ↓ Move down
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DroppableColumn({
+  column,
+  cards,
+  onAddCard,
+  onEditCard,
+  onMoveCard,
+  onMoveColumn,
+}: {
+  column: Column;
+  cards: Card[];
+  onAddCard: (columnId: string) => void;
+  onEditCard: (card: Card) => void;
+  onMoveCard: (cardId: string, direction: "up" | "down") => void;
+  onMoveColumn: (columnId: string, direction: "left" | "right") => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+
+  return (
+    <section
+      ref={setNodeRef}
+      className={`min-h-[520px] w-80 shrink-0 rounded-2xl border p-4 transition ${
+        isOver ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-slate-50"
+      }`}
+    >
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="font-bold text-slate-800">{column.title}</h2>
+          <p className="text-xs text-slate-500">{cards.length} cards</p>
+        </div>
+
+        <button
+          onClick={() => onAddCard(column.id)}
+          className="rounded-lg bg-slate-900 px-3 py-1 text-sm text-white hover:bg-slate-700"
+        >
+          +
+        </button>
+      </div>
+
+      <div className="mb-4 flex gap-2">
+        <button
+          onClick={() => onMoveColumn(column.id, "left")}
+          className="rounded-lg bg-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-300"
+        >
+          ← Column
+        </button>
+        <button
+          onClick={() => onMoveColumn(column.id, "right")}
+          className="rounded-lg bg-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-300"
+        >
+          Column →
+        </button>
+      </div>
+
+      <SortableContext
+        items={cards.map((card) => card.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="space-y-3">
+          {cards.map((card) => (
+            <SortableCard
+              key={card.id}
+              card={card}
+              onEdit={onEditCard}
+              onMoveCard={onMoveCard}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </section>
+  );
+}
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+  const [user, setUser] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [board, setBoard] = useState<Board>(defaultBoard);
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 180, tolerance: 8 },
+    })
+  );
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem("taskflow-user");
+    const savedBoard = localStorage.getItem("taskflow-board");
+
+    if (savedUser) setUser(savedUser);
+
+    if (savedBoard) {
+      const parsed = JSON.parse(savedBoard);
+
+      setBoard({
+        ...defaultBoard,
+        ...parsed,
+        columns: (parsed.columns || defaultBoard.columns).map(
+          (column: Column, index: number) => ({
+            ...column,
+            order: column.order || (index + 1) * 1000,
+          })
+        ),
+        cards: (parsed.cards || defaultBoard.cards).map(
+          (card: Card, index: number) => ({
+            ...card,
+            priority: card.priority || "Medium",
+            order: card.order || (index + 1) * 1000,
+          })
+        ),
+        activities: parsed.activities || [],
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("taskflow-board", JSON.stringify(board));
+  }, [board]);
+
+  const orderedColumns = useMemo(() => {
+    return [...board.columns].sort((a, b) => a.order - b.order);
+  }, [board.columns]);
+
+  const cardsByColumn = useMemo(() => {
+    return orderedColumns.reduce<Record<string, Card[]>>((acc, column) => {
+      acc[column.id] = board.cards
+        .filter((card) => card.columnId === column.id)
+        .sort((a, b) => a.order - b.order);
+      return acc;
+    }, {});
+  }, [board.cards, orderedColumns]);
+
+  const getColumnTitle = (columnId: string) => {
+    return board.columns.find((column) => column.id === columnId)?.title || columnId;
+  };
+
+  const createActivity = (text: string): Activity => ({
+    id: crypto.randomUUID(),
+    text,
+    time: new Date().toLocaleString(),
+  });
+
+  const login = () => {
+    if (!authName.trim()) return;
+    localStorage.setItem("taskflow-user", authName);
+    setUser(authName);
+  };
+
+  const logout = () => {
+    localStorage.removeItem("taskflow-user");
+    setUser("");
+  };
+
+  const addColumn = () => {
+    const title = prompt("Column name:");
+    if (!title) return;
+
+    const maxOrder = Math.max(...board.columns.map((column) => column.order), 0);
+
+    const newColumn: Column = {
+      id: crypto.randomUUID(),
+      title,
+      order: maxOrder + 1000,
+    };
+
+    setBoard({
+      ...board,
+      columns: [...board.columns, newColumn],
+      activities: [
+        createActivity(`${user} created column "${title}".`),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+  };
+
+  const moveColumn = (columnId: string, direction: "left" | "right") => {
+    const sortedColumns = [...orderedColumns];
+    const currentIndex = sortedColumns.findIndex((column) => column.id === columnId);
+    const targetIndex = direction === "left" ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= sortedColumns.length) return;
+
+    const moved = [...sortedColumns];
+    const [selectedColumn] = moved.splice(currentIndex, 1);
+    moved.splice(targetIndex, 0, selectedColumn);
+
+    const reorderedColumns = reorderWithStep(moved);
+
+    setBoard({
+      ...board,
+      columns: board.columns.map(
+        (column) =>
+          reorderedColumns.find((updated) => updated.id === column.id) || column
+      ),
+      activities: [
+        createActivity(`${user} changed the order of column "${selectedColumn.title}".`),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+  };
+
+  const addCard = (columnId: string) => {
+    const title = prompt("Card title:");
+    if (!title) return;
+
+    const columnCards = cardsByColumn[columnId] || [];
+    const maxOrder = Math.max(...columnCards.map((card) => card.order), 0);
+
+    const newCard: Card = {
+      id: crypto.randomUUID(),
+      title,
+      description: "Click Edit to add more details.",
+      columnId,
+      label: "General",
+      assignee: user || "Ece",
+      dueDate: "",
+      priority: "Medium",
+      order: maxOrder + 1000,
+    };
+
+    setBoard({
+      ...board,
+      cards: [...board.cards, newCard],
+      activities: [
+        createActivity(`${user} created "${title}" in ${getColumnTitle(columnId)}.`),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+  };
+
+  const moveCardWithinColumn = (cardId: string, direction: "up" | "down") => {
+    const selectedCard = board.cards.find((card) => card.id === cardId);
+    if (!selectedCard) return;
+
+    const columnCards = [...(cardsByColumn[selectedCard.columnId] || [])];
+    const currentIndex = columnCards.findIndex((card) => card.id === cardId);
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= columnCards.length) return;
+
+    const movedCards = [...columnCards];
+    const [movedCard] = movedCards.splice(currentIndex, 1);
+    movedCards.splice(targetIndex, 0, movedCard);
+
+    const reorderedCards = reorderWithStep(movedCards);
+
+    setBoard({
+      ...board,
+      cards: board.cards.map(
+        (card) => reorderedCards.find((updated) => updated.id === card.id) || card
+      ),
+      activities: [
+        createActivity(`${user} reordered "${selectedCard.title}" in ${getColumnTitle(selectedCard.columnId)}.`),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+  };
+
+  const updateCard = () => {
+    if (!editingCard) return;
+
+    setBoard({
+      ...board,
+      cards: board.cards.map((card) =>
+        card.id === editingCard.id ? editingCard : card
+      ),
+      activities: [
+        createActivity(`${user} updated "${editingCard.title}".`),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+
+    setEditingCard(null);
+  };
+
+  const deleteCard = () => {
+    if (!editingCard) return;
+
+    setBoard({
+      ...board,
+      cards: board.cards.filter((card) => card.id !== editingCard.id),
+      activities: [
+        createActivity(`${user} deleted "${editingCard.title}".`),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+
+    setEditingCard(null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const activeCard = board.cards.find((card) => card.id === activeId);
+    if (!activeCard) return;
+
+    const overCard = board.cards.find((card) => card.id === overId);
+    const overColumn = board.columns.find((column) => column.id === overId);
+
+    const targetColumnId = overCard ? overCard.columnId : overColumn?.id;
+    if (!targetColumnId) return;
+
+    const sourceColumnId = activeCard.columnId;
+    const sourceColumnCards = cardsByColumn[sourceColumnId] || [];
+    const targetColumnCards = cardsByColumn[targetColumnId] || [];
+
+    let updatedCards = [...board.cards];
+
+    if (sourceColumnId === targetColumnId && overCard) {
+      const oldIndex = sourceColumnCards.findIndex((card) => card.id === activeId);
+      const newIndex = sourceColumnCards.findIndex((card) => card.id === overId);
+
+      const movedCards = arrayMove(sourceColumnCards, oldIndex, newIndex);
+      const reorderedCards = reorderWithStep(movedCards);
+
+      updatedCards = updatedCards.map(
+        (card) =>
+          reorderedCards.find((updated) => updated.id === card.id) || card
+      );
+    } else {
+      const targetWithoutActive = targetColumnCards.filter(
+        (card) => card.id !== activeId
+      );
+
+      const insertIndex = overCard
+        ? targetWithoutActive.findIndex((card) => card.id === overId)
+        : targetWithoutActive.length;
+
+      const movedCard = {
+        ...activeCard,
+        columnId: targetColumnId,
+      };
+
+      const newTargetCards = [...targetWithoutActive];
+      newTargetCards.splice(insertIndex, 0, movedCard);
+
+      const reorderedTargetCards = reorderWithStep(newTargetCards);
+
+      updatedCards = updatedCards
+        .filter((card) => card.id !== activeId)
+        .map(
+          (card) =>
+            reorderedTargetCards.find((updated) => updated.id === card.id) || card
+        );
+
+      const finalMovedCard =
+        reorderedTargetCards.find((card) => card.id === activeId) || movedCard;
+
+      updatedCards.push(finalMovedCard);
+    }
+
+    setBoard({
+      ...board,
+      cards: updatedCards,
+      activities: [
+        createActivity(
+          `${user} moved "${activeCard.title}" from ${getColumnTitle(
+            sourceColumnId
+          )} to ${getColumnTitle(targetColumnId)}.`
+        ),
+        ...(board.activities || []),
+      ].slice(0, 8),
+    });
+  };
+
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-slate-700 p-6">
+        <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+          <h1 className="text-3xl font-bold text-slate-900">TaskFlow</h1>
+          <p className="mt-2 text-slate-500">
+            A simple Kanban board for small software teams.
+          </p>
+
+          <input
+            value={authName}
+            onChange={(e) => setAuthName(e.target.value)}
+            placeholder="Enter your name"
+            className="mt-6 w-full rounded-xl border border-slate-300 p-3 outline-none focus:border-blue-500"
+          />
+
+          <button
+            onClick={login}
+            className="mt-4 w-full rounded-xl bg-blue-600 p-3 font-semibold text-white hover:bg-blue-700"
+          >
+            Login / Register
+          </button>
+
+          <p className="mt-4 text-xs text-slate-400">
+            Demo authentication is stored locally for this 48-hour case scope.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
       </main>
-    </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-100 p-6">
+      <header className="mb-6 flex flex-col gap-4 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm text-slate-500">Welcome, {user}</p>
+          <input
+            value={board.title}
+            onChange={(e) => setBoard({ ...board, title: e.target.value })}
+            className="mt-1 w-full bg-transparent text-3xl font-bold text-slate-900 outline-none"
+          />
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            Drag cards between columns or reorder them inside the same column.
+            Card and column order values are saved in localStorage.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={addColumn}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-white hover:bg-slate-700"
+          >
+            + Column
+          </button>
+          <button
+            onClick={logout}
+            className="rounded-xl bg-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-300"
+          >
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="flex gap-4 overflow-x-auto pb-6">
+          {orderedColumns.map((column) => (
+            <DroppableColumn
+              key={column.id}
+              column={column}
+              cards={cardsByColumn[column.id] || []}
+              onAddCard={addCard}
+              onEditCard={setEditingCard}
+              onMoveCard={moveCardWithinColumn}
+              onMoveColumn={moveColumn}
+            />
+          ))}
+        </div>
+      </DndContext>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-900">Activity Log</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Recent board actions are tracked for visibility.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {(board.activities || []).length === 0 ? (
+              <p className="text-sm text-slate-400">No activity yet.</p>
+            ) : (
+              board.activities.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                >
+                  <p className="text-sm text-slate-700">{activity.text}</p>
+                  <p className="mt-1 text-xs text-slate-400">{activity.time}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-slate-900">
+            Technical Decisions
+          </h2>
+          <ul className="mt-4 space-y-3 text-sm text-slate-600">
+            <li>
+              <b>Library:</b> dnd-kit and dnd-kit sortable were selected because
+              they are modern, lightweight, customizable and support pointer/touch
+              interactions.
+            </li>
+            <li>
+              <b>Persistence:</b> board, columns, cards, priority, activity and
+              order values are stored in localStorage.
+            </li>
+            <li>
+              <b>Ordering:</b> each card and column has an order value. Cards can
+              be inserted between other cards and are rendered after sorting by order.
+            </li>
+            <li>
+              <b>Mobile:</b> touch sensor is enabled. Move up/down and column
+              left/right buttons remain as alternative mechanisms for small screens.
+            </li>
+            <li>
+              <b>48-hour scope:</b> core drag-drop, editing, ordering,
+              persistence, mobile usability and activity tracking were prioritized
+              over real-time collaboration.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      {editingCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-slate-900">Edit Card</h2>
+
+            <label className="mt-4 block text-sm font-medium text-slate-600">
+              Title
+            </label>
+            <input
+              value={editingCard.title}
+              onChange={(e) =>
+                setEditingCard({ ...editingCard, title: e.target.value })
+              }
+              className="mt-1 w-full rounded-xl border p-3 outline-none focus:border-blue-500"
+            />
+
+            <label className="mt-4 block text-sm font-medium text-slate-600">
+              Description
+            </label>
+            <textarea
+              value={editingCard.description}
+              onChange={(e) =>
+                setEditingCard({
+                  ...editingCard,
+                  description: e.target.value,
+                })
+              }
+              className="mt-1 h-28 w-full rounded-xl border p-3 outline-none focus:border-blue-500"
+            />
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div>
+                <label className="text-sm font-medium text-slate-600">
+                  Priority
+                </label>
+                <select
+                  value={editingCard.priority}
+                  onChange={(e) =>
+                    setEditingCard({
+                      ...editingCard,
+                      priority: e.target.value as Priority,
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3 outline-none"
+                >
+                  <option>Low</option>
+                  <option>Medium</option>
+                  <option>High</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-600">
+                  Label
+                </label>
+                <input
+                  value={editingCard.label}
+                  onChange={(e) =>
+                    setEditingCard({ ...editingCard, label: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-600">
+                  Assignee
+                </label>
+                <input
+                  value={editingCard.assignee}
+                  onChange={(e) =>
+                    setEditingCard({
+                      ...editingCard,
+                      assignee: e.target.value,
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-600">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  value={editingCard.dueDate}
+                  onChange={(e) =>
+                    setEditingCard({
+                      ...editingCard,
+                      dueDate: e.target.value,
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={deleteCard}
+                className="rounded-xl bg-red-100 px-4 py-2 text-red-700 hover:bg-red-200"
+              >
+                Delete
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingCard(null)}
+                  className="rounded-xl bg-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateCard}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
