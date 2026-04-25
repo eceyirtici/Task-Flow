@@ -678,8 +678,8 @@ const editColumn = (columnId: string) => {
 
         <div className="flex gap-2">
           <button
-  onClick={() => {
-    localStorage.removeItem("board");
+    onClick={() => {
+    localStorage.removeItem("taskflow-board");
     window.location.reload();
   }}
   className="text-sm text-red-500 hover:underline"
