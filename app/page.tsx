@@ -107,7 +107,7 @@ const defaultBoard: Board = {
     label: "Design",
     assignee: "Ece",
     dueDate: "2026-04-28",
-    priority: "Medium",
+    priority: "Low",
     order: 1000,
   },
 ],
@@ -678,6 +678,15 @@ const editColumn = (columnId: string) => {
 
         <div className="flex gap-2">
           <button
+  onClick={() => {
+    localStorage.removeItem("board");
+    window.location.reload();
+  }}
+  className="text-sm text-red-500 hover:underline"
+>
+  Reset Board
+</button>
+          <button
             onClick={addColumn}
             className="rounded-xl bg-slate-900 px-4 py-2 text-white hover:bg-slate-700"
           >
@@ -745,51 +754,56 @@ const editColumn = (columnId: string) => {
     over sensors, sorting behavior, and visual feedback.
   </li>
   <li>
-    <b>Ordering logic:</b> each card and column has an <code>order</code> value.
+    <b>Ordering logic:</b> Each card and column has an <code>order</code> value.
     Items are rendered after sorting by this value, which keeps the order stable
     after refresh. Reordering updates these values in controlled steps, allowing
     cards to be inserted between others.
   </li>
   <li>
-    <b>Persistence:</b> board data is stored in localStorage, including columns,
+    <b>Persistence:</b> Board data is stored in localStorage, including columns,
     cards, order values, priorities, due dates, assignees, and activity history.
     This ensures the board state is preserved without requiring a backend within
     the 48-hour scope.
   </li>
   <li>
-    <b>Mobile usability:</b> drag-and-drop can be unreliable on small touch
+    <b>Mobile usability:</b> Drag-and-drop can be unreliable on small touch
     screens. For this reason, I implemented a mobile-only “Move / Change Status”
     action as a reliable fallback while keeping full drag-and-drop on desktop.
   </li>
   <li>
-    <b>Column management:</b> columns can be created, renamed, and reordered.
+    <b>Column management:</b> Columns can be created, renamed, and reordered.
     This supports a flexible board → column → card data model.
   </li>
   <li>
-    <b>Card details:</b> cards include title, description, priority, label,
+    <b>Card details:</b> Cards include title, description, priority, label,
     assignee, and due date. These were selected to provide meaningful task
     tracking within the limited time scope.
   </li>
   <li>
-    <b>Activity history:</b> important actions such as moving, editing, deleting,
+    <b>Activity history:</b> Important actions such as moving, editing, deleting,
     and renaming are tracked to make board changes visible and simulate team
     collaboration.
   </li>
   <li>
-    <b>Performance:</b> cards are grouped and sorted using memoized data to avoid
+    <b>Performance:</b> Cards are grouped and sorted using memoized data to avoid
     unnecessary recalculations. For larger boards, virtualization could be
     introduced.
   </li>
   <li>
-    <b>Scope decision:</b> within the 48-hour timeframe, I prioritized building a
+    <b>Scope decision:</b> Within the 48-hour timeframe, I prioritized building a
     reliable and complete core Kanban experience rather than adding partially
     implemented features.
   </li>
   <li>
-    <b>Sharing:</b> board sharing was considered but left out of the MVP. In a
+    <b>Sharing:</b> Board sharing was considered but left out of the MVP. In a
     production version, I would first implement view-only links, then
     collaborative editing with user permissions.
   </li>
+  <li>
+    <b>Reset mechanism:</b> Since the application uses localStorage for persistence,
+a manual reset option is provided to clear stored data and restore the
+default demo state. This is useful for testing and demonstration purposes.
+</li>
 </ul>
 </div>
 </section>
