@@ -54,7 +54,7 @@ type Board = {
 
 const defaultBoard: Board = {
   id: "board-1",
-  title: "TaskFlow Product Board",
+  title: "TaskFlow — Kanban Workflow",
   columns: [
     { id: "todo", title: "To Do", order: 1000 },
     { id: "progress", title: "In Progress", order: 2000 },
@@ -62,40 +62,55 @@ const defaultBoard: Board = {
     { id: "done", title: "Done", order: 4000 },
   ],
   cards: [
-    {
-      id: "card-1",
-      title: "Design login screen",
-      description: "Create a simple demo login/register flow.",
-      columnId: "todo",
-      label: "UI",
-      assignee: "Ece",
-      dueDate: "2026-04-28",
-      priority: "High",
-      order: 1000,
-    },
-    {
-      id: "card-2",
-      title: "Add drag and drop",
-      description: "Cards should move between columns smoothly.",
-      columnId: "todo",
-      label: "Core",
-      assignee: "Ece",
-      dueDate: "2026-04-28",
-      priority: "Medium",
-      order: 2000,
-    },
-    {
-      id: "card-3",
-      title: "Persist board state",
-      description: "Save cards, columns and ordering in localStorage.",
-      columnId: "todo",
-      label: "Data",
-      assignee: "Ece",
-      dueDate: "2026-04-28",
-      priority: "Medium",
-      order: 3000,
-    },
-  ],
+  {
+    id: "card-1",
+    title: "🎯 Prepare project scope",
+    description:
+      "Define the essential Kanban features and prioritize a reliable 48-hour MVP.",
+    columnId: "todo",
+    label: "Product",
+    assignee: "Ece",
+    dueDate: "2026-04-28",
+    priority: "High",
+    order: 1000,
+  },
+  {
+    id: "card-2",
+    title: "🚀 Build sortable drag-and-drop",
+    description:
+      "Allow cards to move between columns and be reordered within the same column.",
+    columnId: "todo",
+    label: "Engineering",
+    assignee: "Ece",
+    dueDate: "2026-04-28",
+    priority: "High",
+    order: 2000,
+  },
+  {
+    id: "card-3",
+    title: "📦 Persist board state",
+    description:
+      "Store cards, columns, order values, and activity history so refresh does not reset the board.",
+    columnId: "progress",
+    label: "Data",
+    assignee: "Ece",
+    dueDate: "2026-04-28",
+    priority: "Medium",
+    order: 1000,
+  },
+  {
+    id: "card-4",
+    title: "📱Improve mobile usability",
+    description:
+      "Add a Move / Change Status action for touch devices where drag-and-drop may be difficult.",
+    columnId: "review",
+    label: "Design",
+    assignee: "Ece",
+    dueDate: "2026-04-28",
+    priority: "Medium",
+    order: 1000,
+  },
+],
   activities: [],
 };
 
@@ -140,9 +155,11 @@ function SortableCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-xl border bg-white p-4 shadow-sm transition ${
-        isDragging ? "opacity-70 shadow-xl" : "hover:shadow-md"
-      }`}
+className={`rounded-xl border p-4 shadow-sm transition ${
+  isDragging
+    ? "scale-105 border-blue-400 bg-blue-50 opacity-80 shadow-2xl"
+    : "bg-white hover:shadow-lg hover:-translate-y-1 hover:border-pink-300"
+}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div
@@ -179,6 +196,13 @@ function SortableCard({
         )}
       </div>
 
+      <button
+        onClick={() => onEdit(card)}
+        className="md:hidden mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+      >
+        Move / Change Status
+      </button>
+
       <div className="mt-3 flex gap-2">
         <button
           onClick={() => onMoveCard(card.id, "up")}
@@ -204,6 +228,7 @@ function DroppableColumn({
   onEditCard,
   onMoveCard,
   onMoveColumn,
+  onEditColumn,
 }: {
   column: Column;
   cards: Card[];
@@ -211,6 +236,7 @@ function DroppableColumn({
   onEditCard: (card: Card) => void;
   onMoveCard: (cardId: string, direction: "up" | "down") => void;
   onMoveColumn: (columnId: string, direction: "left" | "right") => void;
+  onEditColumn: (columnId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -223,7 +249,16 @@ function DroppableColumn({
     >
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
-          <h2 className="font-bold text-slate-800">{column.title}</h2>
+          <h2 className="font-bold text-slate-800 flex items-center gap-2">
+  <span className="w-1.5 h-5 bg-pink-400 rounded"></span>
+  {column.title}
+</h2>
+          <button
+  onClick={() => onEditColumn(column.id)}
+  className="text-xs text-blue-600 hover:underline"
+>
+  Edit column
+</button>
           <p className="text-xs text-slate-500">{cards.length} cards</p>
         </div>
 
@@ -373,7 +408,24 @@ export default function Home() {
       ].slice(0, 8),
     });
   };
+const editColumn = (columnId: string) => {
+  const column = board.columns.find((col) => col.id === columnId);
+  if (!column) return;
 
+  const newTitle = prompt("New column name:", column.title);
+  if (!newTitle) return;
+
+  setBoard({
+    ...board,
+    columns: board.columns.map((col) =>
+      col.id === columnId ? { ...col, title: newTitle } : col
+    ),
+    activities: [
+      createActivity(`${user} renamed column "${column.title}" to "${newTitle}".`),
+      ...(board.activities || []),
+    ].slice(0, 8),
+  });
+};
   const moveColumn = (columnId: string, direction: "left" | "right") => {
     const sortedColumns = [...orderedColumns];
     const currentIndex = sortedColumns.findIndex((column) => column.id === columnId);
@@ -460,13 +512,22 @@ export default function Home() {
   const updateCard = () => {
     if (!editingCard) return;
 
+    const oldCard = board.cards.find((card) => card.id === editingCard.id);
+    const moved = oldCard && oldCard.columnId !== editingCard.columnId;
+
     setBoard({
       ...board,
       cards: board.cards.map((card) =>
         card.id === editingCard.id ? editingCard : card
       ),
       activities: [
-        createActivity(`${user} updated "${editingCard.title}".`),
+        createActivity(
+          moved && oldCard
+            ? `${user} moved "${editingCard.title}" from ${getColumnTitle(
+                oldCard.columnId
+              )} to ${getColumnTitle(editingCard.columnId)}.`
+            : `${user} updated "${editingCard.title}".`
+        ),
         ...(board.activities || []),
       ].slice(0, 8),
     });
@@ -600,18 +661,18 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6">
-      <header className="mb-6 flex flex-col gap-4 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+<main className="min-h-screen bg-pink-50 p-6">
+      <header className="mb-6 flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-pink-100 to-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm text-slate-500">Welcome, {user}</p>
           <input
             value={board.title}
             onChange={(e) => setBoard({ ...board, title: e.target.value })}
-            className="mt-1 w-full bg-transparent text-3xl font-bold text-slate-900 outline-none"
+            className="mt-1 w-full bg-transparent text-3xl font-bold text-pink-400 outline-none"
           />
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Drag cards between columns or reorder them inside the same column.
-            Card and column order values are saved in localStorage.
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            A lightweight Kanban board built for small software teams. 
+            It supports sortable drag-and-drop cards, editable columns, persistent ordering, mobile-friendly movement, and activity tracking.
           </p>
         </div>
 
@@ -642,12 +703,13 @@ export default function Home() {
               onEditCard={setEditingCard}
               onMoveCard={moveCardWithinColumn}
               onMoveColumn={moveColumn}
+              onEditColumn={editColumn}
             />
           ))}
         </div>
       </DndContext>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+  <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-3xl bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-slate-900">Activity Log</h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -656,12 +718,12 @@ export default function Home() {
 
           <div className="mt-4 space-y-3">
             {(board.activities || []).length === 0 ? (
-              <p className="text-sm text-slate-400">No activity yet.</p>
+              <p className="text-sm text-slate-400">No activity yet. Start by creating or moving a card.</p>
             ) : (
               board.activities.map((activity) => (
                 <div
                   key={activity.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                  className="rounded-xl border border-slate-200 bg-white hover:shadow-md p-3"
                 >
                   <p className="text-sm text-slate-700">{activity.text}</p>
                   <p className="mt-1 text-xs text-slate-400">{activity.time}</p>
@@ -675,36 +737,65 @@ export default function Home() {
           <h2 className="text-lg font-bold text-slate-900">
             Technical Decisions
           </h2>
-          <ul className="mt-4 space-y-3 text-sm text-slate-600">
-            <li>
-              <b>Library:</b> dnd-kit and dnd-kit sortable were selected because
-              they are modern, lightweight, customizable and support pointer/touch
-              interactions.
-            </li>
-            <li>
-              <b>Persistence:</b> board, columns, cards, priority, activity and
-              order values are stored in localStorage.
-            </li>
-            <li>
-              <b>Ordering:</b> each card and column has an order value. Cards can
-              be inserted between other cards and are rendered after sorting by order.
-            </li>
-            <li>
-              <b>Mobile:</b> touch sensor is enabled. Move up/down and column
-              left/right buttons remain as alternative mechanisms for small screens.
-            </li>
-            <li>
-              <b>48-hour scope:</b> core drag-drop, editing, ordering,
-              persistence, mobile usability and activity tracking were prioritized
-              over real-time collaboration.
-            </li>
-          </ul>
-        </div>
-      </section>
-
+  <ul className="mt-4 space-y-3 text-sm text-slate-600">
+  <li>
+    <b>Drag-and-drop library:</b> I chose dnd-kit and dnd-kit sortable because
+    they are modern, actively maintained, lightweight, and flexible for custom
+    UI. Compared with browser-native drag-and-drop, they provide better control
+    over sensors, sorting behavior, and visual feedback.
+  </li>
+  <li>
+    <b>Ordering logic:</b> each card and column has an <code>order</code> value.
+    Items are rendered after sorting by this value, which keeps the order stable
+    after refresh. Reordering updates these values in controlled steps, allowing
+    cards to be inserted between others.
+  </li>
+  <li>
+    <b>Persistence:</b> board data is stored in localStorage, including columns,
+    cards, order values, priorities, due dates, assignees, and activity history.
+    This ensures the board state is preserved without requiring a backend within
+    the 48-hour scope.
+  </li>
+  <li>
+    <b>Mobile usability:</b> drag-and-drop can be unreliable on small touch
+    screens. For this reason, I implemented a mobile-only “Move / Change Status”
+    action as a reliable fallback while keeping full drag-and-drop on desktop.
+  </li>
+  <li>
+    <b>Column management:</b> columns can be created, renamed, and reordered.
+    This supports a flexible board → column → card data model.
+  </li>
+  <li>
+    <b>Card details:</b> cards include title, description, priority, label,
+    assignee, and due date. These were selected to provide meaningful task
+    tracking within the limited time scope.
+  </li>
+  <li>
+    <b>Activity history:</b> important actions such as moving, editing, deleting,
+    and renaming are tracked to make board changes visible and simulate team
+    collaboration.
+  </li>
+  <li>
+    <b>Performance:</b> cards are grouped and sorted using memoized data to avoid
+    unnecessary recalculations. For larger boards, virtualization could be
+    introduced.
+  </li>
+  <li>
+    <b>Scope decision:</b> within the 48-hour timeframe, I prioritized building a
+    reliable and complete core Kanban experience rather than adding partially
+    implemented features.
+  </li>
+  <li>
+    <b>Sharing:</b> board sharing was considered but left out of the MVP. In a
+    production version, I would first implement view-only links, then
+    collaborative editing with user permissions.
+  </li>
+</ul>
+</div>
+</section>
       {editingCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <h2 className="text-xl font-bold text-slate-900">Edit Card</h2>
 
             <label className="mt-4 block text-sm font-medium text-slate-600">
@@ -731,6 +822,28 @@ export default function Home() {
               }
               className="mt-1 h-28 w-full rounded-xl border p-3 outline-none focus:border-blue-500"
             />
+
+            <div className="md:hidden mt-4">
+              <label className="text-sm font-medium text-slate-600">
+                Column / Status
+              </label>
+              <select
+                value={editingCard.columnId}
+                onChange={(e) =>
+                  setEditingCard({
+                    ...editingCard,
+                    columnId: e.target.value,
+                  })
+                }
+                className="mt-1 w-full rounded-xl border p-3 outline-none"
+              >
+                {board.columns.map((col) => (
+                  <option key={col.id} value={col.id}>
+                    {col.title}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
               <div>
